@@ -29,8 +29,9 @@ const defaultMenu = {
 > ⤿ *.setname* ← Cambiar nombre
 > ⤿ *.setbanner* ← Cambiar banner
 
-> ∘₊✧ *Adonix API Oficial:*
-> ❀ https://theadonix-api.vercel.app
+> (*Nota: La sección de API Adonix ha sido comentada temporalmente.*)
+> (*∘₊✧ Adonix API Oficial:*)
+> (*❀ https://theadonix-api.vercel.app*)
 
 > *⌬ .・。.・゜✭・.・✫・゜・。. ⌬*
 
@@ -41,7 +42,7 @@ const defaultMenu = {
   header: '\n> ꒷︶꒷꒥꒷‧₊˚ *%category*',
   body: '> ⤿ %cmd %islimit %isPremium',
   footer: '> ꒷꒦꒷꒦꒷꒷꒦꒷꒦꒷꒦꒷꒦꒷꒷',
-  after: '\n> ✦ 𓆩 *Made with love by 𝗪𝗶𝗿𝗸* ✐ ☁︎',
+  after: '\n> ⚜️ *%botname* by SYA Team ⚜️',
 }
 
 const handler = async (m, { conn, usedPrefix: _p }) => {

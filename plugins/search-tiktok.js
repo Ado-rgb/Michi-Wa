@@ -15,7 +15,7 @@ ${usedPrefix + command} baile divertido
   let img = './storage/img/menu.jpg'
 
   // Sacar nombre del sub-bot si tiene config
-  let nombreBot = global.namebot || '✧ Michi - Wa ✧'
+  let nombreBot = global.namebot || '✨ SYA Team Bot ✨'
   try {
     const botActual = conn.user?.jid?.split('@')[0].replace(/\D/g, '')
     const configPath = path.join('./JadiBots', botActual, 'config.json')
@@ -42,7 +42,7 @@ ${usedPrefix + command} baile divertido
       txt += `*${i + 1}.* ✧ ${video.title || 'Sin título'}\n❀ ${video.url}\n─────────────────────\n`
     }
 
-    txt += `╰─────────────✦\n\n> ✦ 𝖱𝖾𝗌𝗎𝗅𝗍𝗌 𝖡𝗒 *${nombreBot}*`
+    txt += `╰─────────────✦\n\n> ⚜️ Resultados por *${nombreBot}* ⚜️`
 
     const isURL = /^https?:\/\//i.test(img)
     const imageContent = isURL ? { image: { url: img } } : { image: fs.readFileSync(img) }

@@ -1,4 +1,4 @@
-console.log('Michi Wa Bot ...')
+console.log('SYA Team Bot starting...')
 
 import { join, dirname } from 'path'
 import { createRequire } from 'module'
@@ -10,17 +10,27 @@ import cfonts from 'cfonts'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const require = createRequire(__dirname)
 
-cfonts.say('The - Michi\nWa', {
-  font: 'block',
+cfonts.say('SYA Team Bot', {
+  font: 'console',
   align: 'center',
-  gradient: ['whiteBright', 'white']
-})
+  gradient: ['#00ADD8', '#FF0080'], // Degradado profesional y moderno
+  background: 'transparent',
+  letterSpacing: 1,
+  lineHeight: 1,
+  space: true,
+  maxLength: '0',
+});
 
-cfonts.say('Bot Multi Device', {
-  font: 'simple',
+cfonts.say('WhatsApp Bot Framework', {
+  font: 'slick', // Una fuente más estilizada
   align: 'center',
-  gradient: ['red', 'white']
-})
+  colors: ['#FFFFFF'], // Color blanco para contraste
+  background: 'transparent',
+  letterSpacing: 1,
+  lineHeight: 1,
+  space: true,
+  maxLength: '0',
+});
 
 let isWorking = false
 

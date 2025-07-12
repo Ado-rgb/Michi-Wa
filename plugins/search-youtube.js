@@ -4,10 +4,10 @@ import path from 'path'
 
 let handler = async (m, { conn, usedPrefix, text, command }) => {
   if (!text) return conn.reply(m.chat, `
-❀ *Michi-Wa* ✦
+✨ *SYA Team Bot - YouTube Search* ✨
 
-> ✦ Escribe el nombre de un video.
-> ❀ *Ejemplo:*
+> ⚜️ Escribe el nombre de un video.
+> ⓘ *Ejemplo:*
 > *${usedPrefix + command} lofi anime*
 `.trim(), m, rcanal)
 
@@ -17,7 +17,7 @@ let handler = async (m, { conn, usedPrefix, text, command }) => {
   const botJid = conn.user?.jid?.split('@')[0].replace(/\D/g, '')
   const configPath = path.join('./JadiBots', botJid, 'config.json')
 
-  let nombreBot = global.namebot || '✦ Michi-Wa ✦'
+  let nombreBot = global.namebot || '✨ SYA Team Bot ✨'
   if (fs.existsSync(configPath)) {
     try {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
@@ -53,7 +53,7 @@ let handler = async (m, { conn, usedPrefix, text, command }) => {
       textMsg += `> ❀ *Link:* ${video.link}\n\n`
     })
 
-    textMsg += `✦ *By ${nombreBot}* 🐾`
+    textMsg += `⚜️ *${nombreBot}* ⚜️`
 
     const isUrl = /^https?:\/\//.test(imgPath)
     const messagePayload = isUrl ? { image: { url: imgPath } } : { image: fs.readFileSync(imgPath) }

@@ -1,7 +1,7 @@
 {
-  "name": "YuruYuri-MD",
-  "version": "1.0.0",
-  "description": "Yuru Yuri Multi Device",
+  "name": "sya-team-bot",
+  "version": "2.0.0",
+  "description": "Advanced WhatsApp Bot developed by SYA Team",
   "main": "index.js",
   "type": "module",
   "directories": {
@@ -12,16 +12,16 @@
   "scripts": {
     "start": "node index.js"
   },
-  "homepage": "https://github.com/Im-Ado/Yuru-Yuri",
+  "homepage": "https://github.com/SYA-Team/sya-team-bot",
   "author": {
-    "name": "Im-Ado"
+    "name": "SYA Team"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Im-Ado/Yuru-Yuri.git"
+    "url": "git+https://github.com/SYA-Team/sya-team-bot.git"
   },
   "bugs": {
-    "url": "https://github.com/Im-Ado/Yuru-Yuri/issues"
+    "url": "https://github.com/SYA-Team/sya-team-bot/issues"
   },
   "license": "GPL-3.0-or-later",
   "dependencies": {

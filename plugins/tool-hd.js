@@ -19,7 +19,7 @@ const handler = async (m, { conn, usedPrefix, command }) => {
     const pr = await remini(img, "enhance")
 
     // Obtener el nombre del subbot si lo tiene
-    let nombreBot = global.namebot || '✧ Michi Wa ✧'
+    let nombreBot = global.namebot || '✨ SYA Team Bot ✨'
     try {
       const botNumber = conn.user?.jid?.split('@')[0].replace(/\D/g, '')
       const configPath = path.join('./JadiBots', botNumber, 'config.json')
@@ -39,7 +39,7 @@ const handler = async (m, { conn, usedPrefix, command }) => {
 ☄︎ *Proceso :* Mejora de calidad
 ✩ *Resultado :* Imagen HD
 
-> ✦ 𝖤𝗇𝗁𝖺𝗇𝖼𝖾𝖽 𝖡𝗒 *${nombreBot}*
+> ⚜️ Mejorado por *${nombreBot}* ⚜️
     `.trim()
 
     await conn.sendFile(m.chat, pr, 'imagen_hd.jpg', caption, m)

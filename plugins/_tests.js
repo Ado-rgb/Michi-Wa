@@ -17,7 +17,7 @@ let buttons = [
 
 let buttonMessage = {
   text: texto,
-  footer: 'YuruYuri Bot',
+  footer: 'SYA Team Bot',
   buttons: buttons,
   headerType: 1,
   // Esto hace que al tocar el botón abra el link sin mostrarlo en el mensaje

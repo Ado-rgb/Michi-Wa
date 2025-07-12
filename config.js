@@ -4,33 +4,36 @@ import { fileURLToPath } from 'url'
 
 
 global.owner = [
-  ['50493732693', 'Wirk', true],
+  ['50493732693', 'SYA Team Admin', true], // Ejemplo, el owner real debe configurarlo
+  // ['otrousuario', 'SYA Team Member', false]
 ]
 
-
+// global.mods y global.prems pueden ser poblados según sea necesario
 global.mods = []
 global.prems = []
 
 global.libreria = 'Baileys'
-global.baileys = 'V 6.7.16' 
-global.vs = '2.2.0'
-global.nameqr = 'MichiWaMD'
-global.namebot = '✿◟ʏᴜʀᴜ ʏᴜʀɪ ᴍᴅ◞✿'
-global.sessions = 'Sessions'
-global.jadi = 'JadiBots' 
-global.yukiJadibts = true
+global.baileys = '@whiskeysockets/baileys' // Usar el nombre del paquete
+global.vs = '2.0.0' // Versión del bot, coincidente con package.json
+global.nameqr = 'sya_team_bot_qr'
+global.namebot = '✨ SYA Team Bot ✨'
+global.sessions = '.sya_sessions' // Renombrar carpeta de sesiones para evitar conflictos
+global.jadi = '.sya_jadibots' // Renombrar carpeta de JadiBots
+global.yukiJadibts = true // Mantener si la funcionalidad es deseada
 
-global.packname = '✦ Michi-Wa ✦'
-global.namebot = '✧ Michi-Wa ✧'
-global.author = '© Made with ☁︎ Wirk ✧'
+global.packname = '⚜️ SYA Team Bot ⚜️'
+// global.namebot ya está definido arriba, se puede eliminar la re-definición o unificar.
+// Para evitar confusión, se comentará la siguiente línea y se usará la de arriba.
+// global.namebot = '✧ Michi-Wa ✧'
+global.author = '© Powered by SYA Team'
 
 
-global.namecanal = '✧ Ado Channel ☎︎'
-global.canal = 'https://whatsapp.com/channel/0029Vb5pM031CYoMvQi2I02D'
-global.idcanal = '120363403739366547@newsletter'
+global.namecanal = '📢 SYA Team Channel 📢' // Nombre de ejemplo
+global.canal = 'https://whatsapp.com/channel/YOUR_SYA_TEAM_CHANNEL_ID' // Reemplazar con el canal real
+global.idcanal = 'YOUR_SYA_TEAM_NEWSLETTER_ID@newsletter' // Reemplazar con el ID real
 
-global.ch = {
-ch1: '120363420941524030@newsletter',
+global.ch = { // Canales adicionales si son necesarios
+  ch1: 'ID_CANAL_ADICIONAL_1@newsletter',
 }
 
 global.multiplier = 69 

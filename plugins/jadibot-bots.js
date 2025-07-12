@@ -29,12 +29,12 @@ let handler = async (m, { conn }) => {
   const formatUptime = clockString(uptime)
   const totalUsers = uniqueUsers.size
 
-  let txt = `❀ *Subs Activos de Michi-Wa* ✦\n\n`
-  txt += `> ✦ *Tiempo activo:* ${formatUptime}\n`
-  txt += `> ✦ *Subs conectados:* ${totalUsers}\n`
+  let txt = `✨ *Sub-Bots Activos de SYA Team Bot* ✨\n\n`
+  txt += `> ⚜️ *Tiempo activo:* ${formatUptime}\n`
+  txt += `> 🤖 *Subs conectados:* ${totalUsers}\n`
 
   if (totalUsers > 0) {
-    txt += `\n❀ *Lista de Subs Conectados:* ✦\n\n`
+    txt += `\n✨ *Lista de Sub-Bots Conectados:* ✨\n\n`
     let i = 1
     for (const [jid, nombre] of uniqueUsers) {
       const numero = jid.split('@')[0]

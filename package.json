@@ -27,7 +27,7 @@
   "dependencies": {
     "@bochilteam/scraper": "^4.2.4",
     "@hapi/boom": "^10.0.1",
-    "@StarlightsTeam/Scraper": "github:Ado926/Starlights-Scraper",
+    "@StarlightsTeam/Scraper": "github:Ado926/StarlightsTeam-Scraper",
     "@whiskeysockets/baileys": "https://github.com/SYA-TEAM/Bai",
     "aptoide-scraper": "github:DIEGO-OFC/dv-aptoide-scraper",
     "ruhend-scraper": "*",

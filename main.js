@@ -5,7 +5,7 @@ import { createRequire } from 'module';
 import path, { join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { platform } from 'process';
-import * as ws from 'ws';
+import * as ws from 'ws'; // Keep this, as `ws` is imported and used for `ws.OPEN`
 import { readdirSync, statSync, unlinkSync, existsSync, readFileSync, watch, mkdirSync } from 'fs';
 import yargs from 'yargs';
 import chalk from 'chalk';
@@ -14,7 +14,11 @@ import { tmpdir } from 'os';
 import { format } from 'util';
 import pino from 'pino';
 import { Boom } from '@hapi/boom';
-import { makeWASocket, protoType, serialize } from './lib/simple.js';
+
+// Only import what's needed from simple.js, and ensure it's called once.
+// Do not destructure protoType or serialize if they are global modifying functions.
+import { protoType, serialize } from './lib/simple.js';
+
 import { Low, JSONFile } from 'lowdb';
 import lodash from 'lodash';
 import readline from 'readline';
@@ -34,6 +38,8 @@ const {
 
 const PORT = process.env.PORT || process.env.SERVER_PORT || 3000;
 
+// Call protoType() and serialize() ONLY ONCE here at the beginning.
+// They should not be called again during reloads.
 protoType();
 serialize();
 
@@ -67,8 +73,7 @@ const __dirname = global.__dirname(import.meta.url);
 global.opts = new Object(yargs(process.argv.slice(2)).exitProcess(false).parse());
 global.prefix = new RegExp(
   '^[' +
-    (opts['prefix'] || '‎z/#$%.\\-').replace(/[|\\{}()[\]^$+*?.\-\^]/g, '\\$&') +
-    ']'
+    (opts['prefix'] || '‎z/#$%.\\-').replace(/[|\\{}()[\]^$+*?.\-\^]/g, '\\$&')
 );
 
 global.db = new Low(new JSONFile(`storage/databases/database.json`));
@@ -161,7 +166,7 @@ async function reconnectSubBot(botPath) {
 
         const subBotConn = makeWASocket({
             version: version,
-            logger,
+            logger, // Use global logger or subBotLogger
             printQRInTerminal: false,
             auth: {
                 creds: subBotState.creds,
@@ -215,7 +220,7 @@ async function reconnectSubBot(botPath) {
         // Almacenar la conexión del sub-bot
         global.subBots = global.subBots || {};
         global.subBots[path.basename(botPath)] = subBotConn;
-        
+
         // Agregar a global.conns para listado (si no existe ya)
         global.conns = global.conns || [];
         const isAlreadyListed = global.conns.some(c => c.user?.jid === subBotConn.user?.jid);
@@ -223,7 +228,7 @@ async function reconnectSubBot(botPath) {
           global.conns.push(subBotConn);
           console.log(chalk.greenBright(`[SUB-BOT] 🟢 Agregado a la lista de conexiones: ${subBotConn.user?.jid}`));
         }
-        
+
     } catch (e) {
         console.error(chalk.redBright(`[SUB-BOT] Error crítico al reconectar ${chalk.cyan(path.basename(botPath))}:`), e);
     }
@@ -270,13 +275,6 @@ async function handleLogin() {
 
     if (loginMethod === 'code' && typeof conn.requestPairingCode === 'function') {
       try {
-        // Esperar un breve momento para asegurar que la conexión WebSocket esté lista si es necesario
-        // await new Promise(resolve => setTimeout(resolve, 1000));
-
-        // No es necesario verificar conn.ws.readyState === ws.OPEN aquí directamente,
-        // Baileys maneja internamente la solicitud del código.
-        // Si hay problemas, Baileys arrojará un error que se captura en el catch.
-
         let code = await conn.requestPairingCode(phoneNumber);
         code = code?.match(/.{1,4}/g)?.join('-') || code; // Formatear código
         console.log(chalk.cyanBright.bold(`\n✨ Tu código de emparejamiento es: ${chalk.bgCyan.black(` ${code} `)} ✨`));
@@ -351,6 +349,8 @@ async function connectionUpdate(update) {
     lastDisconnect?.error?.output?.statusCode ||
     lastDisconnect?.error?.output?.payload?.statusCode;
   if (code && code !== DisconnectReason.loggedOut && conn?.ws.socket == null) {
+    // No need to reload handler on every disconnect, only if connection is truly lost.
+    // The main ev.on('connection.update') will re-establish events.
     await global.reloadHandler(true).catch(console.error);
     global.timestamp.connect = new Date();
   }
@@ -363,7 +363,7 @@ async function connectionUpdate(update) {
 
     // --- Lógica de reconexión de sub-bots al iniciar el bot principal ---
     const rutaJadiBot = join(__dirname, global.jadi || './.sya_jadibots'); // Usar global.jadi de config.js
-    
+
     if (!existsSync(rutaJadiBot)) {
         mkdirSync(rutaJadiBot, { recursive: true });
         console.log(chalk.yellowBright(`[SUB-BOT] Directorio de JadiBots creado en: ./${rutaJadiBot}`));
@@ -395,7 +395,7 @@ async function connectionUpdate(update) {
   // Manejo de errores de conexión específicos
   if (reason === DisconnectReason.connectionReplaced) {
     console.log(chalk.redBright.bold('[FATAL] ⚠️ Conexión reemplazada. Otra sesión se ha iniciado con este número. Por favor, cierra la otra sesión.'));
-    // Podría ser útil forzar la salida aquí o intentar eliminar la sesión local para forzar un nuevo QR.
+    // Podría ser útil forzar la salida aquí o intentar eliminar la sesión local para force un nuevo QR.
     // process.exit(1); // O manejarlo de forma más elegante
   } else if (reason === DisconnectReason.loggedOut) {
     console.log(chalk.redBright.bold('[FATAL] ⚠️ Dispositivo desconectado (Logged Out). Elimina la carpeta de sesión (./${authFile}) y escanea el QR nuevamente.'));
@@ -461,11 +461,21 @@ global.reloadHandler = async function (restartConn = false) {
   }
 
   // (Re)asignar manejadores de eventos
-  if (!isInit && global.conn?.ev) { // Solo desregistrar si ya estaban registrados y conn existe
-    global.conn.ev.off('messages.upsert', global.conn.handler);
-    global.conn.ev.off('connection.update', global.conn.connectionUpdate);
-    global.conn.ev.off('creds.update', global.conn.credsUpdate);
+  // No need to use `!isInit` check here if it's always set to true after new connection.
+  // The important part is removing previous listeners before adding new ones.
+  if (global.conn?.ev) {
+    // Check if handler was previously set to remove only existing ones to avoid errors.
+    if (global.conn.handler) {
+      global.conn.ev.off('messages.upsert', global.conn.handler);
+    }
+    if (global.conn.connectionUpdate) {
+      global.conn.ev.off('connection.update', global.conn.connectionUpdate);
+    }
+    if (global.conn.credsUpdate) {
+      global.conn.ev.off('creds.update', global.conn.credsUpdate);
+    }
   }
+
 
   if (global.conn && handler && typeof handler.handler === 'function') {
     global.conn.handler = handler.handler.bind(global.conn);
@@ -480,7 +490,7 @@ global.reloadHandler = async function (restartConn = false) {
      console.error(chalk.redBright('[SYSTEM] ❌ No se pudieron re-vincular los eventos principales. `global.conn` o `handler` no están listos.'));
   }
 
-  isInit = false;
+  isInit = false; // Reset after initialization/re-binding
   return true;
 };
 
@@ -501,11 +511,14 @@ async function filesInit() {
       const filePath = global.__filename(join(pluginFolder, filename));
       // Añadir un timestamp a la importación para evitar problemas de caché al recargar
       const module = await import(`${filePath}?update=${Date.now()}`);
+      // Ensure plugin exports a default or the expected structure.
+      // If plugins are just functions, you might need to adjust this.
       global.plugins[filename] = module.default || module;
       // console.log(chalk.green(`[PLUGIN] Cargado: ${filename}`));
       loadedCount++;
     } catch (e) {
       console.error(chalk.redBright(`[PLUGIN LOADER] ❌ Error al cargar plugin '${filename}':`), e);
+      // It's important to delete the faulty plugin to prevent it from causing issues later.
       delete global.plugins[filename];
     }
   }
@@ -523,12 +536,15 @@ global.reload = async (_ev, filename) => {
     const filePath = global.__filename(join(pluginFolder, filename), true);
     console.log(chalk.yellowBright(`[PLUGIN RELOADER] Detectado cambio en '${filename}', intentando recargar...`));
 
-    if (filename in global.plugins) {
-      if (!existsSync(filePath)) {
+    // Handle deletion: if file no longer exists, remove the plugin
+    if (!existsSync(filePath)) {
+      if (filename in global.plugins) {
         console.warn(chalk.yellow(`[PLUGIN RELOADER] 🔌 Plugin '${filename}' eliminado.`));
         delete global.plugins[filename];
-        return;
+        // Re-order plugins if one was deleted
+        global.plugins = Object.fromEntries(Object.entries(global.plugins).sort(([a], [b]) => a.localeCompare(b)));
       }
+      return;
     }
 
     const err = syntaxerror(readFileSync(filePath), filename, {
@@ -538,18 +554,22 @@ global.reload = async (_ev, filename) => {
 
     if (err) {
       console.error(chalk.redBright(`[PLUGIN RELOADER] ❌ Error de sintaxis al cargar '${filename}':\n${format(err)}`));
+      // Delete the old, broken version if it exists
+      delete global.plugins[filename];
       return;
     }
 
     try {
-      // Añadir timestamp para forzar la recarga del módulo
+      // Clear module cache for the specific file before re-importing
+      // Note: This is a tricky part with ESM. The `?update=${Date.now()}` appended to the URL
+      // is the most common workaround for forcing a re-import in Node.js ESM.
       const module = await import(`${global.__filename(filePath)}?update=${Date.now()}`);
       global.plugins[filename] = module.default || module;
       console.log(chalk.greenBright(`[PLUGIN RELOADER] ✅ Plugin '${filename}' recargado y actualizado.`));
     } catch (e) {
       console.error(chalk.redBright(`[PLUGIN RELOADER] ❌ Error al requerir plugin '${filename}':\n${format(e)}`));
-      // Opcional: eliminar el plugin si falla la recarga para evitar estado inconsistente
-      // delete global.plugins[filename];
+      // Delete the plugin if it fails to load to prevent using a broken version
+      delete global.plugins[filename];
     } finally {
       // Reordenar plugins alfabéticamente (opcional, pero puede ser útil para consistencia)
       global.plugins = Object.fromEntries(Object.entries(global.plugins).sort(([a], [b]) => a.localeCompare(b)));

@@ -1,5 +1,12 @@
+/**
+ * @description Muestra la información de contacto del propietario/creador del bot.
+ * Obtiene los datos del propietario principal definido en `global.owner` en `config.js`.
+ * Envía un vCard y un mensaje de texto con detalles.
+ * @param {object} m El objeto mensaje de Baileys.
+ * @param {object} conn La instancia de conexión del bot.
+ */
 let handler = async (m, { conn }) => {
-  let ownerName = 'SYA Team';
+  let ownerName = 'SYA Team'; // Fallback name
   let ownerNumber = ''; // Se intentará obtener del config
   let ownerJid = '';
 

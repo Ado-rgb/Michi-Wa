@@ -1,113 +1,190 @@
-import fetch from 'node-fetch'
-import axios from 'axios'
-import fs from 'fs'
-import path from 'path'
+import fetch from 'node-fetch';
+import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
+import chalk from 'chalk';
 
+const ytUrlRegex = /^(?:https?:\/\/)?(?:www\.|m\.|music\.)?youtu\.?be(?:\.com)?\/?.*(?:watch|embed)?(?:.*v=|v\/|\/)([\w-]{11})(?:\S+)?$/;
+
+/**
+ * @description Descarga videos de YouTube como MP4 (documento) utilizando una API específica (ymcdn).
+ * @param {object} m El objeto mensaje de Baileys.
+ * @param {object} conn La instancia de conexión del bot.
+ * @param {string} text El enlace URL del video de YouTube.
+ * @param {string} usedPrefix El prefijo utilizado.
+ * @param {string} command El comando invocado.
+ */
 let handler = async (m, { conn, text, usedPrefix, command, args }) => {
+  if (!args[0] || !args[0].trim()) {
+    return conn.reply(m.chat,
+      `📎 *Descargador de Video YouTube (Documento)*\n\n` +
+      `Por favor, ingresa el enlace URL del video de YouTube que deseas descargar como documento.\n\n` +
+      `*Uso:* \`${usedPrefix}${command} <enlace_youtube>\`\n` +
+      `*Ejemplo:* \`${usedPrefix}${command} https://youtu.be/example123\``,
+      m, { ...global.rcanal }
+    );
+  }
+
+  const videoUrl = args[0].trim();
+  if (!ytUrlRegex.test(videoUrl)) {
+    return conn.reply(m.chat, `⚠️ El enlace proporcionado no parece ser un enlace válido de YouTube.`, m, { ...global.rcanal });
+  }
+
+  await conn.reply(m.chat, `📥 Procesando tu video de YouTube como documento: "_${videoUrl}_"... Por favor espera.`, m);
+  await conn.sendMessage(m.chat, { react: { text: '⏳', key: m.key } });
+
   try {
-    if (!text) {
-      return conn.reply(m.chat, `*Por favor, ingresa la URL del vídeo de YouTube.*`, m)
+    const videoData = await ytdlCustomApi(videoUrl); // Usar la función de API personalizada
+    if (!videoData || !videoData.url || !videoData.title) {
+      throw new Error('La API no devolvió la información necesaria para la descarga.');
     }
 
-    if (!/^(?:https?:\/\/)?(?:www\.|m\.|music\.)?youtu\.?be(?:\.com)?\/?.*(?:watch|embed)?(?:.*v=|v\/|\/)([\w\-_]+)\&?/.test(args[0])) {
-      return m.reply(`*⚠️ Enlace inválido, por favor coloca un enlace válido de YouTube.*`)
-    }
+    const fileSize = await getFileSize(videoData.url);
+    const formattedSize = fileSize ? formatBytes(fileSize) : 'Desconocido';
 
-    m.react('🕒')
-
-    const json = await ytdl(args[0])
-    const size = await getSize(json.url)
-    const sizeStr = size ? await formatSize(size) : 'Desconocido'
-
-    // Leer el nombre del subbot como el menú
-    const botActual = conn.user?.jid?.split('@')[0].replace(/\D/g, '')
-    const configPath = path.join('./JadiBots', botActual, 'config.json')
-
-    let nombreBot = global.namebot || '✧ ʏᴜʀᴜ ʏᴜʀɪ ✧'
-    if (fs.existsSync(configPath)) {
-      try {
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
-        if (config.name) nombreBot = config.name
-      } catch (err) {
-        console.log('⚠️ No se pudo leer config del subbot:', err)
+    // Determinar el nombre del bot actual (principal o sub-bot)
+    let currentBotName = global.namebot || 'SYA Team Bot';
+    const jadiBotFolder = global.jadi || '.sya_jadibots';
+    const botJid = conn.user?.jid?.split('@')[0]?.replace(/\D/g, '');
+    if (botJid) {
+      const configPathSubBot = path.join(jadiBotFolder, botJid, 'config.json');
+      if (fs.existsSync(configPathSubBot)) {
+        try {
+          const configSubBot = JSON.parse(fs.readFileSync(configPathSubBot, 'utf-8'));
+          if (configSubBot.name) currentBotName = configSubBot.name;
+        } catch (err) {
+          console.warn(chalk.yellow(`[YT DOC WARN] No se pudo leer config del sub-bot ${botJid}:`), err);
+        }
       }
     }
 
-    const cap = `*${json.title}*\n≡ *🍫 URL:* ${args[0]}\n≡ *🔥 Peso:* ${sizeStr}\n\n> Send by: ${nombreBot}`
+    const caption =
+      `🎬 *Video de YouTube (Documento)*\n\n` +
+      `✨ *Título:* ${videoData.title}\n` +
+      `🔗 *URL:* ${videoUrl}\n` +
+      `⚖️ *Peso Estimado:* ${formattedSize}\n\n` +
+      `✨ Powered by ${currentBotName}`;
 
-    conn.sendFile(m.chat, await (await fetch(json.url)).buffer(), `${json.title}.mp4`, cap, m)
-    m.react('✅')
+    // Descargar el buffer y enviar como documento
+    const videoBuffer = await (await fetch(videoData.url)).buffer();
+
+    await conn.sendMessage(m.chat, {
+        document: videoBuffer,
+        mimetype: 'video/mp4',
+        fileName: `${videoData.title.replace(/[<>:"/\\|?*]+/g, '')}.mp4`,
+        caption: caption,
+    }, { quoted: m, ...global.rcanal });
+
+    await conn.sendMessage(m.chat, { react: { text: '✅', key: m.key } });
+
   } catch (e) {
-    console.error(e)
-    m.reply(`Ocurrió un error:\n${e.message}`)
+    console.error(chalk.redBright('[YT DOC DOWNLOADER ERROR]'), e);
+    await conn.sendMessage(m.chat, { react: { text: '❌', key: m.key } });
+    conn.reply(m.chat,
+      `❌ Ocurrió un error al descargar el video como documento:\n\n` +
+      `\`${e.message || 'Error desconocido.'}\`\n\n` +
+      `Por favor, verifica el enlace o intenta más tarde.`,
+      m, { ...global.rcanal }
+    );
   }
-}
+};
 
-handler.help = ['ytmp4doc']
-handler.command = ['playvidoc', 'ytmp4']
-handler.tags = ['downloader']
+// Se cambia el comando principal para evitar conflicto con ytmp4 de downloader-ytmp42.js
+handler.help = ['ytmp4doc <enlace_youtube>', 'playdoc <enlace_youtube> (Descarga video de YT como documento)'];
+handler.command = ['ytmp4doc', 'playdoc', 'youtubedoc'];
+handler.tags = ['downloader', 'youtube'];
+handler.register = true;
+handler.limit = true;
 
-export default handler
+export default handler;
 
-// Funciones auxiliares
-
-async function ytdl(url) {
+/**
+ * @description Obtiene el enlace de descarga de un video de YouTube usando la API de ymcdn.
+ * @param {string} url La URL del video de YouTube.
+ * @returns {Promise<object>} Objeto con { url: string, title: string }.
+ */
+async function ytdlCustomApi(url) {
   const headers = {
     "accept": "*/*",
-    "accept-language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
-    "sec-ch-ua": "\"Not A(Brand\";v=\"8\", \"Chromium\";v=\"132\"",
-    "sec-ch-ua-mobile": "?1",
-    "sec-ch-ua-platform": "\"Android\"",
+    "accept-language": "en-US,en;q=0.9", // Usar inglés para respuestas más consistentes de API
+    "sec-ch-ua": "\"Chromium\";v=\"116\", \"Not)A;Brand\";v=\"24\", \"Microsoft Edge\";v=\"116\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"Windows\"",
     "sec-fetch-dest": "empty",
     "sec-fetch-mode": "cors",
     "sec-fetch-site": "cross-site",
-    "Referer": "https://id.ytmp3.mobi/",
+    "Referer": "https://id.ytmp3.mobi/", // El referer puede ser importante para esta API
     "Referrer-Policy": "strict-origin-when-cross-origin"
+  };
+
+  // console.log(chalk.blueBright('[YT DOC DEBUG] Iniciando ytdlCustomApi para:'), url);
+
+  const initialRes = await fetch(`https://d.ymcdn.org/api/v1/init?p=y&23=1llum1n471&_=${Math.random()}`, { headers });
+  if (!initialRes.ok) throw new Error(`API Init Error (HTTP ${initialRes.status})`);
+  const initData = await initialRes.json();
+  if (!initData.convertURL) throw new Error('API Init no devolvió convertURL.');
+
+  const videoId = url.match(ytUrlRegex)?.[1];
+  if (!videoId) throw new Error('No se pudo extraer el ID del video de YouTube desde la URL.');
+
+  const convertURL = initData.convertURL + `&v=${videoId}&f=mp4&_=${Math.random()}`;
+  // console.log(chalk.blueBright('[YT DOC DEBUG] Convert URL:'), convertURL);
+
+  const convertRes = await fetch(convertURL, { headers });
+  if (!convertRes.ok) throw new Error(`API Convert Error (HTTP ${convertRes.status})`);
+  const convertData = await convertRes.json();
+  if (!convertData.progressURL || !convertData.downloadURL) throw new Error('API Convert no devolvió progressURL o downloadURL.');
+
+  let progressInfo = {};
+  // Intentar obtener el progreso unas cuantas veces, pero no bloquear indefinidamente.
+  for (let i = 0; i < 5; i++) { // Aumentado a 5 intentos con delay
+    const progressRes = await fetch(convertData.progressURL, { headers });
+    if (!progressRes.ok) {
+        // console.warn(chalk.yellowBright(`[YT DOC WARNING] API Progress Error (HTTP ${progressRes.status}), intento ${i+1}`));
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Esperar 1 segundo antes de reintentar
+        continue;
+    }
+    progressInfo = await progressRes.json();
+    // console.log(chalk.blueBright(`[YT DOC DEBUG] Progress Info (intento ${i+1}):`), progressInfo);
+    if (progressInfo.progress === 3 || progressInfo.title) break; // progress: 3 suele indicar completado, o si ya tenemos título
+    await new Promise(resolve => setTimeout(resolve, 1500)); // Esperar 1.5 segundos
   }
 
-  const initial = await fetch(`https://d.ymcdn.org/api/v1/init?p=y&23=1llum1n471&_=${Math.random()}`, { headers })
-  const init = await initial.json()
-  const id = url.match(/(?:youtu\.be\/|youtube\.com\/(?:.*v=|.*\/|.*embed\/))([^&?/]+)/)?.[1]
-  const convertURL = init.convertURL + `&v=${id}&f=mp4&_=${Math.random()}`
-
-  const converts = await fetch(convertURL, { headers })
-  const convert = await converts.json()
-
-  let info = {}
-  for (let i = 0; i < 3; i++) {
-    const progressResponse = await fetch(convert.progressURL, { headers })
-    info = await progressResponse.json()
-    if (info.progress === 3) break
+  if (!progressInfo.title && !convertData.downloadURL){
+      console.warn(chalk.yellowBright('[YT DOC WARNING] No se pudo obtener el título ni el enlace de descarga final de la API.'), progressInfo, convertData);
+      throw new Error('No se pudo obtener la información completa del video desde la API después de varios intentos.');
   }
 
   return {
-    url: convert.downloadURL,
-    title: info.title || 'video'
-  }
+    url: convertData.downloadURL, // Usar el downloadURL que se obtiene antes del bucle de progreso
+    title: progressInfo.title || 'video_youtube' // Usar el título del progreso o un fallback
+  };
 }
 
-async function formatSize(bytes) {
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let i = 0
-
-  if (!bytes || isNaN(bytes)) return 'Desconocido'
-
-  while (bytes >= 1024 && i < units.length - 1) {
-    bytes /= 1024
-    i++
-  }
-
-  return `${bytes.toFixed(2)} ${units[i]}`
+/**
+ * @description Formatea bytes a un tamaño legible (KB, MB, GB).
+ * @param {number} bytes El número de bytes.
+ * @returns {string} El tamaño formateado o "Desconocido".
+ */
+function formatBytes(bytes) {
+  if (!bytes || isNaN(bytes) || bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
 }
 
-async function getSize(url) {
+/**
+ * @description Obtiene el tamaño del archivo desde una URL usando una solicitud HEAD.
+ * @param {string} url La URL del archivo.
+ * @returns {Promise<number|null>} El tamaño en bytes o null si no se pudo obtener.
+ */
+async function getFileSize(url) {
   try {
-    const response = await axios.head(url)
-    const contentLength = response.headers['content-length']
-    if (!contentLength) return null
-    return parseInt(contentLength, 10)
+    const response = await axios.head(url, { timeout: 5000 }); // Timeout de 5s
+    const contentLength = response.headers['content-length'];
+    return contentLength ? parseInt(contentLength, 10) : null;
   } catch (error) {
-    console.error("Error al obtener el tamaño:", error.message)
-    return null
+    console.warn(chalk.yellowBright("[GET FILE SIZE WARN] Error al obtener el tamaño del archivo:"), error.message);
+    return null;
   }
 }

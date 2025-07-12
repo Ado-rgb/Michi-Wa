@@ -1,84 +1,137 @@
 import fetch from 'node-fetch';
+import chalk from 'chalk';
 
+/**
+ * @description Interactúa con una API de IA para obtener respuestas en formato de audio (voz), imagen o texto.
+ * Prioriza la respuesta de audio si está disponible.
+ * @param {object} m El objeto mensaje de Baileys.
+ * @param {object} conn La instancia de conexión del bot.
+ * @param {string} text El texto de la pregunta para la IA.
+ * @param {string} usedPrefix El prefijo utilizado.
+ * @param {string} command El comando invocado.
+ */
 const handler = async (m, { conn, text, usedPrefix, command }) => {
-  if (!text) {
-    return m.reply(`🌵 *Adonix IA:*\n\nEscribí algo maje...\nEjemplo:\n${usedPrefix + command} dime un chiste`);
+  if (!text || !text.trim()) {
+    return conn.reply(m.chat,
+      `🗣️ *Asistente IA con Voz*\n\n` +
+      `Por favor, ingresa tu pregunta o el texto que deseas que la IA procese.\n\n` +
+      `*Uso:* \`${usedPrefix}${command} <tu pregunta/texto>\`\n` +
+      `*Ejemplo:* \`${usedPrefix}${command} Cuéntame un dato curioso sobre el espacio\``,
+      m, { ...global.rcanal }
+    );
   }
 
-  await m.react('🧠');
+  const processingMessage = await conn.reply(m.chat, `⏳ Procesando tu solicitud con el Asistente IA (Voz)... Por favor espera.`, m);
+  await conn.sendMessage(m.chat, { react: { text: '💬', key: m.key } });
 
   try {
+    // NOTA: La URL de la API original. Si SYA Team tiene una API preferida, debería actualizarse aquí.
     const apiURL = `https://theadonix-api.vercel.app/api/adonixvoz?q=${encodeURIComponent(text)}`;
     const res = await fetch(apiURL);
+
+    if (!res.ok) {
+      let errorBody = '';
+      try { errorBody = await res.text(); } catch (_) {}
+      throw new Error(`Error de API (HTTP ${res.status}): ${res.statusText}. ${errorBody || 'No hay detalles adicionales.'}`);
+    }
+
     const data = await res.json();
+    // console.log(chalk.blueBright('[AI VOZ DEBUG] Respuesta de API:'), JSON.stringify(data, null, 2)); // Descomentar para debug detallado
 
-    console.log('[🧠 RES DATA]', data); // DEBUG 🔍
-
-    // 🔊 AUDIO BASE64
+    // Prioridad 1: Respuesta de Audio (Base64)
     if (data.audio_base64) {
       try {
         const audioBuffer = Buffer.from(data.audio_base64, 'base64');
+        // console.log(chalk.blue('[AI VOZ DEBUG] Tamaño del buffer de audio:', audioBuffer.length, 'bytes'));
 
-        // Verifica tamaño
-        console.log('🔊 Tamaño del buffer:', audioBuffer.length, 'bytes');
+        if (audioBuffer.length < 5000) { // Umbral un poco más bajo, pero aún así previene audios vacíos/corruptos
+            console.warn(chalk.yellowBright('[AI VOZ WARNING] Audio recibido parece demasiado pequeño o corrupto. Longitud:', audioBuffer.length));
+            // No enviar este audio, intentar mostrar texto si existe
+            if (data.respuesta && typeof data.respuesta === 'string') {
+                 await conn.sendMessage(m.chat, { delete: processingMessage.key });
+                 conn.reply(m.chat, `⚠️ El audio generado era muy pequeño (posiblemente un error). Mostrando respuesta de texto:\n\n💡 *Asistente IA Responde:*\n${data.respuesta.trim()}`, m, {...global.rcanal});
+                 await conn.sendMessage(m.chat, { react: { text: '⚠️', key: m.key } });
+                 return;
+            }
+            throw new Error('Audio generado demasiado pequeño o posiblemente corrupto.');
+        }
 
-        if (audioBuffer.length < 10000) throw new Error('⚠️ Audio demasiado pequeño o corrupto');
-
+        await conn.sendMessage(m.chat, { delete: processingMessage.key });
         await conn.sendMessage(m.chat, {
           audio: audioBuffer,
           mimetype: 'audio/mpeg',
-          ptt: true
-        }, { quoted: m });
-
-        await m.react('✅');
+          ptt: true // Enviar como nota de voz
+        }, { quoted: m, ...global.rcanal });
+        await conn.sendMessage(m.chat, { react: { text: '✅', key: m.key } });
         return;
 
-      } catch (err) {
-        console.error('[❌ ERROR AL PROCESAR AUDIO]', err);
-        await m.reply('❌ No se pudo enviar el audio. Tal vez está corrupto o mal formado.');
-        await m.react('❌');
+      } catch (audioErr) {
+        console.error(chalk.redBright('[AI VOZ ERROR AL PROCESAR AUDIO]'), audioErr);
+        await conn.sendMessage(m.chat, { delete: processingMessage.key });
+        // Intentar mostrar respuesta de texto si el audio falla y hay texto
+        if (data.respuesta && typeof data.respuesta === 'string') {
+            conn.reply(m.chat, `⚠️ No se pudo procesar el audio. Mostrando respuesta de texto:\n\n💡 *Asistente IA Responde:*\n${data.respuesta.trim()}`, m, {...global.rcanal});
+        } else {
+            conn.reply(m.chat, '❌ No se pudo procesar el audio recibido de la IA. Intenta más tarde.', m, { ...global.rcanal });
+        }
+        await conn.sendMessage(m.chat, { react: { text: '❌', key: m.key } });
         return;
       }
     }
 
-    // 🖼️ IMAGEN
+    // Prioridad 2: Respuesta de Imagen
     if (data.imagen_generada || data.result?.image) {
       const imgUrl = data.imagen_generada || data.result.image;
+      await conn.sendMessage(m.chat, { delete: processingMessage.key });
       await conn.sendMessage(m.chat, {
         image: { url: imgUrl },
-        caption: `🖼️ *Adonix IA generó esta imagen:*\n\n🗯️ *Pregunta:* ${data.pregunta || text}\n\n📌 ${data.mensaje || 'Aquí está tu imagen perrito'}`,
-      }, { quoted: m });
-      await m.react('✅');
+        caption: `🖼️ *Asistente IA* (Voz) generó esta imagen para:\n_"${data.pregunta || text}"_\n\n${data.mensaje || ''}`,
+      }, { quoted: m, ...global.rcanal });
+      await conn.sendMessage(m.chat, { react: { text: '✅', key: m.key } });
       return;
     }
 
-    // 💬 TEXTO
+    // Prioridad 3: Respuesta de Texto (si no hubo audio ni imagen)
     if (data.respuesta && typeof data.respuesta === 'string') {
-      const [mensaje, ...codigo] = data.respuesta.split(/```(?:javascript|js|html)?/i);
-      let textoFinal = `🌵 *Adonix IA:*\n\n${mensaje.trim()}`;
-
-      if (codigo.length) {
-        textoFinal += `\n\n💻 *Código:*\n\`\`\`js\n${codigo.join('```').trim().slice(0, 3900)}\n\`\`\``;
+      const parts = data.respuesta.split(/```(?:javascript|js|html|css|python|java|c|cpp|csharp|php|ruby|go|swift|kotlin|bash|sh|powershell|sql|json|xml|yaml|md|txt|text|)/i);
+      let textoFinal = `💡 *Asistente IA Responde (Voz):*\n\n${parts[0].trim()}`;
+      if (parts.length > 1) {
+        for (let i = 1; i < parts.length; i += 2) {
+          const codeBlockContent = parts[i+1] ? parts[i].trim() : parts[i].trim().slice(0, parts[i].trim().lastIndexOf('\n') || parts[i].trim().length);
+          const languageMatch = data.respuesta.match(/```(\w+)/);
+          const language = languageMatch ? languageMatch[1] : '';
+          textoFinal += `\n\n💻 *Código (${language || 'detectado'}):*\n\`\`\`${language}\n${codeBlockContent.slice(0, 3800)}\n\`\`\``;
+        }
       }
-
-      await m.reply(textoFinal);
-      await m.react('✅');
+      await conn.sendMessage(m.chat, { delete: processingMessage.key });
+      await conn.reply(m.chat, textoFinal, m, { ...global.rcanal });
+      await conn.sendMessage(m.chat, { react: { text: '✅', key: m.key } });
       return;
     }
 
-    await m.react('❌');
-    return m.reply('❌ No se supo qué mandar 🤷‍♂️');
+    // Si no se pudo procesar ningún tipo de respuesta esperada
+    await conn.sendMessage(m.chat, { delete: processingMessage.key });
+    console.warn(chalk.yellowBright('[AI VOZ PLUGIN WARNING] Respuesta no reconocida de la API:'), JSON.stringify(data, null, 2));
+    await conn.sendMessage(m.chat, { react: { text: '⚠️', key: m.key } });
+    return conn.reply(m.chat, '❌ El Asistente IA (Voz) no pudo procesar tu solicitud o la respuesta no fue en un formato esperado.', m, { ...global.rcanal });
 
   } catch (e) {
-    console.error('[❌ ERROR GENERAL ADONIX IA]', e);
-    await m.react('❌');
-    return m.reply(`❌ Error usando Adonix IA:\n\n${e.message}`);
+    console.error(chalk.redBright('[AI VOZ PLUGIN ERROR GENERAL]'), e);
+    await conn.sendMessage(m.chat, { delete: processingMessage.key });
+    await conn.sendMessage(m.chat, { react: { text: '❌', key: m.key } });
+    return conn.reply(m.chat,
+      `❌ Error al contactar con el Asistente IA (Voz):\n\n` +
+      `\`${e.message || 'Error desconocido.'}\`\n\n` +
+      `Por favor, intenta más tarde.`,
+      m, { ...global.rcanal });
   }
 };
 
-handler.help = ['iavoz <texto>'];
-handler.tags = ['ia'];
-handler.command = ['iavoz'];
+handler.help = ['iavoz <texto> (IA con respuesta prioritaria de voz)'];
+handler.tags = ['ia', 'tools'];
+handler.command = ['iavoz', 'aivoz', 'vozai']; // Alias
+handler.register = true;
+handler.limit = true;
 
 export default handler;
 

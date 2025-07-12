@@ -1,95 +1,160 @@
 import axios from 'axios';
 import fetch from 'node-fetch';
 
+import axios from 'axios';
+import fetch from 'node-fetch';
+import chalk from 'chalk';
+
+/**
+ * @description Consulta a servicios de IA (Luminai y Perplexity como fallback) para responder preguntas.
+ * Utiliza un prompt base obtenido de una URL externa o un fallback interno.
+ * @param {object} msg El objeto mensaje de Baileys.
+ * @param {object} conn La instancia de conexión del bot.
+ * @param {string[]} args Los argumentos del comando (la pregunta).
+ * @param {string} usedPrefix El prefijo utilizado.
+ * @param {string} command El comando invocado.
+ */
 const handler = async (msg, { conn, args, usedPrefix, command }) => {
   const text = args.join(' ');
   const chatId = msg.key.remoteJid;
 
-  if (!text) {
-    return conn.sendMessage(chatId, {
-      text: `Habla con el pndj de xex`
-    }, { quoted: msg });
+  if (!text || !text.trim()) {
+    return conn.reply(chatId,
+      `🧠 *Asistente de Inteligencia Artificial*\n\n` +
+      `Por favor, ingresa tu pregunta o la tarea que deseas que la IA resuelva.\n\n` +
+      `*Uso:* \`${usedPrefix}${command} <tu pregunta>\`\n` +
+      `*Ejemplo:* \`${usedPrefix}${command} ¿Quién descubrió América?\``,
+      msg, { ...global.rcanal }
+    );
   }
 
-  try {
-    await conn.sendMessage(chatId, { react: { text: '🕳️', key: msg.key } });
+  await conn.reply(chatId, `⏳ Consultando al Asistente IA... Por favor espera, esto puede tardar un momento.`, msg);
+  await conn.sendMessage(chatId, { react: { text: '🤔', key: msg.key } }); // Reacción de pensamiento
 
-    const name = msg.pushName || 'Usuario';
-    const prompt = await getPrompt();
-    let result = '';
+  try {
+    const senderName = msg.pushName || 'Usuario';
+    const basePrompt = await getPrompt(); // Obtener el prompt base
+    let resultText = '';
+    let apiSource = '';
 
     try {
-      result = await luminaiQuery(text, name, prompt);
-      result = cleanResponse(result);
-    } catch (e) {
-      console.error('Error Luminai:', e);
+      // Intento 1: Luminai API
+      // console.log(chalk.blueBright('[AI XEX DEBUG] Intentando con Luminai API...'));
+      resultText = await luminaiQuery(text, senderName, basePrompt);
+      resultText = cleanResponse(resultText); // Limpiar respuesta
+      apiSource = 'Luminai';
+    } catch (eLuminai) {
+      console.error(chalk.yellowBright('[AI XEX WARNING] Error con Luminai API:'), eLuminai.message);
+      // Intento 2: Perplexity API (como fallback)
+      // console.log(chalk.blueBright('[AI XEX DEBUG] Falló Luminai, intentando con Perplexity API...'));
       try {
-        result = await perplexityQuery(text, prompt);
-      } catch (e) {
-        console.error('Error Perplexity:', e);
-        throw new Error('No se obtuvo respuesta de los servicios');
+        resultText = await perplexityQuery(text, basePrompt);
+        // Perplexity podría no necesitar la misma limpieza, pero se puede aplicar si es necesario
+        // resultText = cleanResponse(resultText);
+        apiSource = 'Perplexity';
+      } catch (ePerplexity) {
+        console.error(chalk.redBright('[AI XEX ERROR] Error con Perplexity API:'), ePerplexity.message);
+        throw new Error('No se pudo obtener respuesta de ninguno de los servicios de IA disponibles.');
       }
     }
 
-    const responseMsg = `${result}`;
+    if (!resultText || !resultText.trim()) {
+        throw new Error('La IA no proporcionó una respuesta válida o la respuesta estaba vacía.');
+    }
 
-    await conn.sendMessage(chatId, {
-      text: responseMsg
-    }, { quoted: msg });
+    const responseMsg = `💡 *Asistente IA Responde (${apiSource}):*\n\n${resultText.trim()}`;
 
-    await conn.sendMessage(chatId, { react: { text: '😂', key: msg.key } });
+    await conn.reply(chatId, responseMsg, msg, { ...global.rcanal });
+    await conn.sendMessage(chatId, { react: { text: '✅', key: msg.key } });
 
   } catch (error) {
-    console.error(error);
-    await conn.sendMessage(chatId, {
-      text: `❌ Error: ${error.message}`
-    }, { quoted: msg });
-
+    console.error(chalk.redBright('[AI XEX PLUGIN ERROR GENERAL]'), error);
     await conn.sendMessage(chatId, { react: { text: '❌', key: msg.key } });
+    conn.reply(chatId,
+      `❌ Ocurrió un error al procesar tu solicitud con el Asistente IA:\n\n` +
+      `\`${error.message || 'Error desconocido.'}\`\n\n` +
+      `Por favor, intenta más tarde.`,
+      msg, { ...global.rcanal }
+    );
   }
 };
 
+/**
+ * @description Obtiene un prompt base para la IA desde una URL o devuelve un fallback.
+ * TODO: Considerar mover la URL del prompt a config.js o definirlo localmente.
+ * @returns {Promise<string>} El prompt base.
+ */
 async function getPrompt() {
   try {
+    // ADVERTENCIA: Dependencia de un archivo externo en otro repositorio.
+    // Si este archivo cambia o desaparece, afectará el comportamiento del bot.
     const res = await fetch('https://raw.githubusercontent.com/elrebelde21/LoliBot-MD/main/src/text-chatgpt.txt');
+    if (!res.ok) throw new Error(`Error al obtener prompt: HTTP ${res.status}`);
     return await res.text();
-  } catch {
-    return 'Eres un asistente inteligente';
+  } catch (e) {
+    console.warn(chalk.yellowBright('[AI XEX PROMPT WARNING] No se pudo obtener el prompt externo, usando fallback. Error:'), e.message);
+    return 'Eres un asistente de inteligencia artificial útil y conciso, llamado SYA Team Bot. Proporciona respuestas claras y directas.'; // Fallback prompt
   }
 }
 
+/**
+ * @description Limpia la respuesta de texto de la IA, eliminando frases promocionales no deseadas.
+ * @param {string} text El texto a limpiar.
+ * @returns {string} El texto limpio.
+ */
 function cleanResponse(text) {
-  if (!text) return '';
+  if (!text || typeof text !== 'string') return '';
   return text
-    .replace(/Maaf, terjadi kesalahan saat memproses permintaan Anda/g, '')
-    .replace(/Generated by BLACKBOX\.AI.*?https:\/\/www\.blackbox\.ai/g, '')
-    .replace(/and for API requests replace https:\/\/www\.blackbox\.ai with https:\/\/api\.blackbox\.ai/g, '')
+    .replace(/Maaf, terjadi kesalahan saat memproses permintaan Anda/gi, '') // Indonesio: "Lo siento, ocurrió un error..."
+    .replace(/Generated by BLACKBOX\.AI.*?https:\/\/www\.blackbox\.ai/gi, '')
+    .replace(/and for API requests replace https:\/\/www\.blackbox\.ai with https:\/\/api\.blackbox\.ai/gi, '')
+    .replace(/Saya adalah model bahasa AI dan tidak dapat membantu dengan itu\./gi, '') // Indonesio: "Soy un modelo de lenguaje AI..."
     .trim();
 }
 
+/**
+ * @description Realiza una consulta a la API de Luminai.
+ * @param {string} q La pregunta del usuario.
+ * @param {string} user El nombre del usuario.
+ * @param {string} prompt El prompt base para la IA.
+ * @returns {Promise<string>} La respuesta de la IA.
+ */
 async function luminaiQuery(q, user, prompt) {
   const { data } = await axios.post('https://luminai.my.id', {
     content: q,
-    user: user,
-    prompt: prompt,
-    webSearchMode: true
+    user: user, // Nombre del usuario que interactúa
+    prompt: prompt, // Prompt base
+    webSearchMode: true // Habilitar búsqueda web si la API lo soporta
   });
+  if (!data || !data.result) throw new Error('Respuesta inválida de Luminai API');
   return data.result;
 }
 
+/**
+ * @description Realiza una consulta a la API de Perplexity.
+ * @param {string} q La pregunta del usuario.
+ * @param {string} prompt El prompt base (contexto) para la IA.
+ * @returns {Promise<string>} La respuesta de la IA.
+ */
 async function perplexityQuery(q, prompt) {
-  const { data } = await axios.get('https://api.perplexity.ai/chat', {
+  // NOTA: El endpoint y los parámetros para Perplexity pueden variar.
+  // Esta es una implementación de ejemplo y puede necesitar ajustes.
+  // Perplexity podría requerir una API Key para uso continuo.
+  const { data } = await axios.get('https://api.perplexity.ai/chat', { // Endpoint hipotético, verificar documentación oficial
     params: {
       query: q,
-      context: prompt
-    }
+      context: prompt // 'context' o 'system_prompt' o similar
+    },
+    // headers: { 'Authorization': `Bearer TU_API_KEY_PERPLEXITY` } // Si requiere auth
   });
+  if (!data || !data.response) throw new Error('Respuesta inválida de Perplexity API');
   return data.response;
 }
 
-handler.help = ['ask'];
-handler.command = ['ask'];
-handler.tags = ['ai'];
-handler.register = false
+handler.help = ['ask <pregunta>', 'ia <pregunta> (Consulta a la IA con múltiples fuentes)'];
+handler.command = ['ask', 'preguntar', 'xex']; // Mantener 'xex' por si se usa, pero 'ask' es más genérico
+handler.tags = ['ia', 'tools'];
+handler.register = true; // Recomendado
+handler.limit = true;    // Recomendado por uso de APIs
 
 export default handler;
